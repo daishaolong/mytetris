@@ -75,6 +75,7 @@ extern "C" {
 #define  OS_N_SYS_TASKS                 1u
 #endif
 
+#define  OS_TASK_TMR_PRIO   0u							/* timer management task priority                     */
 #define  OS_TASK_STAT_PRIO  (OS_LOWEST_PRIO - 1u)       /* Statistic task priority                     */
 #define  OS_TASK_IDLE_PRIO  (OS_LOWEST_PRIO)            /* IDLE      task priority                     */
 
