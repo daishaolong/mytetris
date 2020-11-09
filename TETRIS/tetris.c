@@ -3,7 +3,7 @@
 #include  "delay.h"
 #include "usart.h"
 #include  <string.h>
-
+#include  <stdlib.h>
 #if SYSTEM_SUPPORT_OS
     #include "includes.h"                   //ucos 使用
 #endif
@@ -17,7 +17,7 @@
 
 //地图使用的行和列的像素点
 #define MAP_ROW_PIXEL_MAX       600//<=SSD_HOR_RESOLUTION
-#define MAP_COL_PXIEL_MAX       470//SSD_VER_RESOLUTION//480
+#define MAP_COL_PXIEL_MAX       SSD_VER_RESOLUTION//480
 
 //地图行和列
 #define MAP_COL_SIZE     (MAP_COL_PXIEL_MAX/BASE_BLOCK_SIZE)//15
@@ -479,12 +479,28 @@ void Tetris_Tmr_Callback(void *ptmr, void *parg)
 //    printf("%s --> %d\r\n", __FUNCTION__, (ticks - last_ticks));
 //    last_ticks = ticks;
 }
+void Random_Number_Init(void)
+{
+	RNG_DeInit();
+	RCC_AHB2PeriphClockCmd(RCC_AHB2Periph_RNG, ENABLE);
+	RNG_Cmd(ENABLE);
+}
+u32 Get_Random_Number(void)
+{
+	while(RNG_GetFlagStatus(RNG_FLAG_DRDY)==RESET);//等待随机数就绪
+	return RNG_GetRandomNumber();
+}
 void Get_Next_Shape(block_t *next)
 {
+	u32 val1,val2;
+	val1=Get_Random_Number();
+	val2=Get_Random_Number();
+	printf("RandomNumber 1:%d\r\n",val1);
+	printf("RandomNumber 2:%d\r\n",val2);
     next->row = 1;
     next->col = MAP_COL_SIZE / 2;
-    next->dir = 1;
-    next->index = 3;
+    next->dir = val1%4;//rand()%4;
+    next->index = val2%7;//rand()%7;
 }
 void Init_Map(void)
 {
@@ -548,6 +564,8 @@ void Draw_Wall(void)
 }
 void Tetris_Init(void)
 {
+	//
+	Random_Number_Init();
 //    u16 row, col;
     //绘制地图边框
     Draw_Wall();
