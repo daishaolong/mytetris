@@ -121,7 +121,7 @@ void key_task(void *pdata)
     u8 key;
     while (1)
     {
-        key = KEY_Scan(0);
+        key = KEY_Scan(1);
         switch (key)
         {
 			case KEY0_PRES:
@@ -145,6 +145,6 @@ void key_task(void *pdata)
             printf("key :%d\r\n", key);
         }
 
-        OSTimeDlyHMSM(0, 0, 0, 10);
+        OSTimeDlyHMSM(0, 0, 0, 80);
     }
 }
