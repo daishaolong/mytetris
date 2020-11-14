@@ -11,17 +11,17 @@
 #define TETRIS_BACK_COLOR    WHITE//背景色
 #define TETRIS_WALL_COLOR    BLACK//围墙色
 //基本小方块大小
-#define BASE_BLOCK_SIZE     20// 方块移动的基本单位
+#define BASE_BLOCK_SIZE     10//30// 方块移动的基本单位
 #define SHAPE_ROW_SIZE      4//方块每行小方块数目
 #define SHAPE_COL_SIZE      4//方块每列小方块数目
 
 //地图使用的行和列的像素点
-#define MAP_ROW_PIXEL_MAX       600//<=SSD_HOR_RESOLUTION
+#define MAP_ROW_PIXEL_MAX       600//<=SSD_HOR_RESOLUTION//(SSD_HOR_RESOLUTION/BASE_BLOCK_SIZE - SHAPE_ROW_SIZE)
 #define MAP_COL_PXIEL_MAX       SSD_VER_RESOLUTION//480
 
 //地图行和列
-#define MAP_COL_SIZE     (MAP_COL_PXIEL_MAX/BASE_BLOCK_SIZE)//15
-#define MAP_ROW_SIZE     (MAP_ROW_PIXEL_MAX/BASE_BLOCK_SIZE)//12
+#define MAP_COL_SIZE     28//(MAP_COL_PXIEL_MAX/BASE_BLOCK_SIZE)//15
+#define MAP_ROW_SIZE     12//(MAP_ROW_PIXEL_MAX/BASE_BLOCK_SIZE)//12
 
 //地图
 u16 map[MAP_ROW_SIZE][MAP_COL_SIZE];//15*12
@@ -256,8 +256,8 @@ void draw_shape(u16 row, u16 col, u8 shape_index, u8 dir)
     u16 color;
     row *= BASE_BLOCK_SIZE; //
     col *= BASE_BLOCK_SIZE; //
-    x1 = row;
-    y1 = col;
+    x1 = col;
+    y1 = row;
     val = shape_array[shape_index][dir].val;
     color = base_shape_color[shape_index];
     while (val > 0)
@@ -274,26 +274,26 @@ void draw_shape(u16 row, u16 col, u8 shape_index, u8 dir)
         }
         val >>= 4;
         bit = 0x0008;
-        col += BASE_BLOCK_SIZE;
-        x1 = row;
-        y1 = col;
+        row += BASE_BLOCK_SIZE;
+        x1 = col;
+        y1 = row;
     }
 }
 void show_all_shape(void)
 {
     u8 dir, index, row, col, startx;
-    startx = 10;
-    row = startx;
-    col = 10;
+    startx = 2;
+    col = startx;
+    row = 1;
     for (index = 0; index < 7; index++)
     {
         for (dir = 0; dir < 4; dir++)
         {
             draw_shape(row, col, index, dir);
-            row += (SHAPE_COL_SIZE + 1);
+            col += (SHAPE_COL_SIZE + 1);
         }
-        row = startx;
-        col += (SHAPE_ROW_SIZE + 1);
+        col = startx;
+        row += (SHAPE_ROW_SIZE + 1);
     }
 }
 
@@ -308,7 +308,38 @@ typedef struct
 
 block_t cur_block;//当前块
 block_t next_block;//下一个块
-
+void Random_Number_Init(void)
+{
+    RNG_DeInit();
+    RCC_AHB2PeriphClockCmd(RCC_AHB2Periph_RNG, ENABLE);
+    RNG_Cmd(ENABLE);
+}
+u32 Get_Random_Number(void)
+{
+    while (RNG_GetFlagStatus(RNG_FLAG_DRDY) == RESET); //等待随机数就绪
+    return RNG_GetRandomNumber();
+}
+void Get_Next_Shape(block_t *next)
+{
+    u32 val1, val2;
+    val1 = Get_Random_Number();
+    val2 = Get_Random_Number();
+//  printf("RandomNumber 1:%d\r\n",val1);
+//  printf("RandomNumber 2:%d\r\n",val2);
+    next->row = 0;//MAP_ROW_SIZE/2;
+    next->col = MAP_COL_SIZE / 2 -1;
+    next->dir = val1 % 4; //rand()%4;
+    next->index = val2 % 7; //rand()%7;
+}
+void Show_Next_Shape(void)
+{
+    u16 row, col;
+    row = 680 / BASE_BLOCK_SIZE;
+    col = 10;
+    LCD_Fill(col * BASE_BLOCK_SIZE, row * BASE_BLOCK_SIZE,
+             (col + SHAPE_COL_SIZE) * BASE_BLOCK_SIZE, (row + SHAPE_ROW_SIZE) * BASE_BLOCK_SIZE, TETRIS_BACK_COLOR);
+    draw_shape(row, col,  next_block.index, next_block.dir);
+}
 //清除<row,col>位置方块在地图上的标记
 void Clear_Block_Flags(u16 row, u16 col, u8 index, u8 dir)
 {
@@ -362,21 +393,21 @@ u8 Is_Conflict(u16 row, u16 col, u8 index, u8 dir)
         for (c = 0; c < 4; c++)
         {
 
-            if ((val & bit) != 0 && map[row + r][col + c] != TETRIS_BACK_COLOR)//边界墙或者已经有方块
+            if ((val & bit) != 0)// && map[row + r][col + c] != TETRIS_BACK_COLOR)//边界墙或者已经有方块
             {
-//              if((row+r)>=(MAP_ROW_SIZE-1))
-//              {
-//                  return 1;//碰到底部边界墙
-//              }
-//              if((col+c)<1 || (col+c)>=(MAP_COL_SIZE-1))
-//              {
-//                  return 1;//碰到左右边界墙
-//              }
-//              if(map[row + r][col + c] != TETRIS_BACK_COLOR)
-//              {
-//                   return 1;//已经有
-//              }
-                return 1;//已经有
+                if ((row + r) < 0 || (row + r) >= (MAP_ROW_SIZE - 1))
+                {
+                    return 1;//碰到底部边界墙
+                }
+                if ((col + c) < 1 || (col + c) >= (MAP_COL_SIZE - 1))
+                {
+                    return 1;//碰到左右边界墙
+                }
+                if (map[row + r][col + c] != TETRIS_BACK_COLOR)
+                {
+                    return 1;//已经有
+                }
+//                return 1;//已经有  --TODO
             }
             bit >>= 1;
         }
@@ -384,8 +415,13 @@ u8 Is_Conflict(u16 row, u16 col, u8 index, u8 dir)
     }
     return 0;
 }
+static u8 game_over = 0;
 void Turn_90(void)
 {
+    if (1 == game_over)
+    {
+        return ;
+    }
     u8 nextdir = (cur_block.dir + 1) % 4;
     Clear_Block_Flags(cur_block.row, cur_block.col, cur_block.index, cur_block.dir); //去除原来的标记
     if (!Is_Conflict(cur_block.row, cur_block.col, cur_block.index, nextdir))
@@ -396,6 +432,11 @@ void Turn_90(void)
 }
 void Move_Rigth(void)
 {
+    if (1 == game_over)
+    {
+        return ;
+    }
+//  printf("Move_Rigth row:%d col:%d\r\n",cur_block.row,cur_block.col);
     Clear_Block_Flags(cur_block.row, cur_block.col, cur_block.index, cur_block.dir); //去除原来的标记
     if (!Is_Conflict(cur_block.row, cur_block.col + 1, cur_block.index, cur_block.dir))
     {
@@ -405,15 +446,92 @@ void Move_Rigth(void)
 }
 void Move_Left(void)
 {
+    if (1 == game_over)
+    {
+        return ;
+    }
+//  printf("Move_Left row:%d col:%d\r\n",cur_block.row,cur_block.col);
     Clear_Block_Flags(cur_block.row, cur_block.col, cur_block.index, cur_block.dir); //去除原来的标记
+//  printf("Move_Left 1\r\n");
     if (!Is_Conflict(cur_block.row, cur_block.col - 1, cur_block.index, cur_block.dir))
     {
+//      printf("Move_Left 2\r\n");
         cur_block.col--;
     }
+//  printf("Move_Left 3\r\n");
     Set_Block_Flags(cur_block.row, cur_block.col, cur_block.index, cur_block.dir); //增加新的标记
+//  printf("Move_Left 4\r\n");
+}
+u8 Is_Full_Line(u16 row)
+{
+    u16 i;
+    for (i = 1; i < MAP_COL_SIZE - 1; i++)
+    {
+        if (TETRIS_BACK_COLOR == map[row][i] || TETRIS_WALL_COLOR == map[row][i])
+        {
+            return 0;
+        }
+    }
+    return 1;
+}
+u8 Is_Empty_Line(u16 row)
+{
+    u16 i;
+    for (i = 1; i < MAP_COL_SIZE - 1; i++)
+    {
+        if (TETRIS_BACK_COLOR != map[row][i] &&  TETRIS_WALL_COLOR != map[row][i])
+        {
+            return 0;
+        }
+    }
+    return 1;
+}
+//返回上一行是否为空行
+u8 Kill_Line(u16 row)
+{
+    u16 i;
+    u8 empty = 1;
+    for (i = 1; i < MAP_COL_SIZE - 1; i++)
+    {
+        map[row][i] = TETRIS_BACK_COLOR; //清除
+    }
+    return empty;
+}
+void Check_Lines(u16 row)
+{
+    s16  i;
+    s16 downmost_empty_row = -1;
+    for (i = SHAPE_ROW_SIZE - 1; i >= 0; i--)
+    {
+        if (Is_Full_Line(row + i))
+        {
+            Kill_Line(row + i);
+            if (-1 == downmost_empty_row)
+            {
+                downmost_empty_row = row + i;
+            }
+        }
+    }
+    if (-1 == downmost_empty_row)
+    {
+        return ;
+    }
+    for (i = downmost_empty_row - 1; i > 0; i--)
+    {
+        if (!Is_Empty_Line(i))
+        {
+            memcpy(map[downmost_empty_row], map[i], sizeof(map[i]));
+            Kill_Line(i);
+            downmost_empty_row--;
+        }
+    }
 }
 void Move_Down(void)
 {
+    if (1 == game_over)
+    {
+        return ;
+    }
     Clear_Block_Flags(cur_block.row, cur_block.col, cur_block.index, cur_block.dir); //去除原来的标记
     if (!Is_Conflict(cur_block.row + 1, cur_block.col, cur_block.index, cur_block.dir))
     {
@@ -423,18 +541,34 @@ void Move_Down(void)
     else//显示出来，检查消行 /是否游戏结束
     {
         Set_Block_Flags(cur_block.row, cur_block.col, cur_block.index, cur_block.dir); //增加新的标记
+        Check_Lines(cur_block.row);
 
+        Show_Game_Board();//--TODO
+        memcpy(&cur_block, &next_block, sizeof(block_t));
+        if (!Is_Conflict(cur_block.row, cur_block.col, cur_block.index, cur_block.dir))
+        {
+            Set_Block_Flags(cur_block.row, cur_block.col, cur_block.index, cur_block.dir);
+            Get_Next_Shape(&next_block);
+            Show_Next_Shape();
+        }
+        else
+        {
+            //游戏结束
+            printf("Game over!!!!\r\n");
+            game_over = 1;
+        }
     }
 }
+
+
 //<row,col>位置画基本小方块
 void draw_block(u16 row, u16 col, u16 color)
 {
     row *= BASE_BLOCK_SIZE; //
     col *= BASE_BLOCK_SIZE; //
-
+    LCD_Fill(col, row, col + BASE_BLOCK_SIZE, row + BASE_BLOCK_SIZE, color);
     if (TETRIS_BACK_COLOR != color)
     {
-        LCD_Fill(col, row, col + BASE_BLOCK_SIZE, row + BASE_BLOCK_SIZE, color);
         LCD_DrawRectangle(col,  row,  col + BASE_BLOCK_SIZE, row + BASE_BLOCK_SIZE);//不是背景色则画框
     }
 
@@ -443,16 +577,30 @@ void Show_Game_Board(void)
 {
 
     u16 row, col;
-    LCD_Fill(BASE_BLOCK_SIZE, BASE_BLOCK_SIZE, BASE_BLOCK_SIZE * (MAP_COL_SIZE - 1),
-             (MAP_ROW_SIZE - 1)*BASE_BLOCK_SIZE, WHITE);
-    for (row = 1; row < MAP_ROW_SIZE-1; row++)
+//    LCD_Fill(BASE_BLOCK_SIZE, BASE_BLOCK_SIZE, BASE_BLOCK_SIZE * (MAP_COL_SIZE - 1),
+//             (MAP_ROW_SIZE - 1)*BASE_BLOCK_SIZE, WHITE);
+    for (row = 0; row < (MAP_ROW_SIZE - 1); row++)//SHAPE_ROW_SIZE
     {
-        for (col = 1; col < MAP_COL_SIZE-1; col++)
+        for (col = 1; col < MAP_COL_SIZE - 1; col++)
         {
-            draw_block(row, col, map[row][col]);
+            if (TETRIS_BACK_COLOR == map[row][col])
+            {
+                draw_block(row, col, map[row][col]);
+            }
         }
     }
-
+    for (row = 0; row < (MAP_ROW_SIZE - 1); row++)
+    {
+        for (col = 1; col < MAP_COL_SIZE - 1; col++)
+        {
+            if (TETRIS_BACK_COLOR != map[row][col])
+            {
+                draw_block(row, col, map[row][col]);
+            }
+        }
+    }
+	//--TODO
+	LCD_DrawLine(0,SHAPE_ROW_SIZE*BASE_BLOCK_SIZE,MAP_COL_PXIEL_MAX,SHAPE_ROW_SIZE*BASE_BLOCK_SIZE);	
 }
 void Tetris_Tmr_Callback(void *ptmr, void *parg)
 {
@@ -479,29 +627,7 @@ void Tetris_Tmr_Callback(void *ptmr, void *parg)
 //    printf("%s --> %d\r\n", __FUNCTION__, (ticks - last_ticks));
 //    last_ticks = ticks;
 }
-void Random_Number_Init(void)
-{
-	RNG_DeInit();
-	RCC_AHB2PeriphClockCmd(RCC_AHB2Periph_RNG, ENABLE);
-	RNG_Cmd(ENABLE);
-}
-u32 Get_Random_Number(void)
-{
-	while(RNG_GetFlagStatus(RNG_FLAG_DRDY)==RESET);//等待随机数就绪
-	return RNG_GetRandomNumber();
-}
-void Get_Next_Shape(block_t *next)
-{
-	u32 val1,val2;
-	val1=Get_Random_Number();
-	val2=Get_Random_Number();
-	printf("RandomNumber 1:%d\r\n",val1);
-	printf("RandomNumber 2:%d\r\n",val2);
-    next->row = 1;
-    next->col = MAP_COL_SIZE / 2;
-    next->dir = val1%4;//rand()%4;
-    next->index = val2%7;//rand()%7;
-}
+
 void Init_Map(void)
 {
     u16 row, col;
@@ -518,7 +644,7 @@ void Init_Map(void)
     row = 0;
     for (col = 0; col < MAP_COL_SIZE; col++)
     {
-        map[row][col] = TETRIS_WALL_COLOR;
+        map[row][col] = TETRIS_BACK_COLOR;//
     }
     row = MAP_ROW_SIZE - 1;
     for (col = 0; col < MAP_COL_SIZE; col++)
@@ -532,10 +658,10 @@ void Init_Map(void)
             map[row][col] = TETRIS_BACK_COLOR;
         }
     }
-	//--TODO
-	Set_Block_Flags(12,10,5,2);
-	
-	Set_Block_Flags(18,9,4,1);
+//  //--TODO
+//  Set_Block_Flags(12,10,5,2);
+//
+//  Set_Block_Flags(18,9,4,1);
 }
 void Draw_Wall(void)
 {
@@ -551,11 +677,11 @@ void Draw_Wall(void)
     {
         draw_block(row,  col, TETRIS_WALL_COLOR);
     }
-    row = 0;
-    for (col = 0; col < MAP_COL_SIZE; col++)
-    {
-        draw_block(row,  col, TETRIS_WALL_COLOR);
-    }
+//    row = 0;
+//    for (col = 0; col < MAP_COL_SIZE; col++)
+//    {
+//        draw_block(row,  col, TETRIS_WALL_COLOR);
+//    }
     row = MAP_ROW_SIZE - 1;
     for (col = 0; col < MAP_COL_SIZE; col++)
     {
@@ -564,15 +690,15 @@ void Draw_Wall(void)
 }
 void Tetris_Init(void)
 {
-	//
-	Random_Number_Init();
+//  show_all_shape();
+//  while(1);
+    Random_Number_Init();
 //    u16 row, col;
     //绘制地图边框
     Draw_Wall();
 //    LCD_DrawRectangle(0,  0, MAP_COL_SIZE * BASE_BLOCK_SIZE, MAP_ROW_SIZE * BASE_BLOCK_SIZE);
 //    printf("col:%d , row:%d\n", MAP_COL_SIZE * BASE_BLOCK_SIZE, MAP_ROW_SIZE * BASE_BLOCK_SIZE);
 //  LCD_DrawRectangle(0,  0,479, 600);
-//    show_all_shape();
     POINT_COLOR = RED;
     LCD_ShowString(10, 650, 50, 16, 16, (u8 *)"SCORE:"); //显示一个字符串,12/16字体
     LCD_ShowxNum(70, 650, 3456, 4, 16, 0);              //显示 数字
@@ -580,8 +706,10 @@ void Tetris_Init(void)
     POINT_COLOR = BLACK;
     Init_Map();
     Get_Next_Shape(&next_block);
-    draw_shape(10, 700 / BASE_BLOCK_SIZE, next_block.index, next_block.dir);
     memcpy(&cur_block, &next_block, sizeof(block_t));
+    Get_Next_Shape(&next_block);
+    Show_Next_Shape();
+
     Set_Block_Flags(cur_block.row, cur_block.col, cur_block.index, cur_block.dir);
     Show_Game_Board();
 

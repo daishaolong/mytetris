@@ -145,6 +145,6 @@ void key_task(void *pdata)
             printf("key :%d\r\n", key);
         }
 
-        OSTimeDlyHMSM(0, 0, 0, 80);
+       OSTimeDlyHMSM(0, 0, 0, 80);
     }
 }
