@@ -6,7 +6,7 @@
 #include "key.h"
 #include "lcd.h"
 #include "tetris.h"
-
+#include "game_board.h"
 
 
 //ALIENTEK 探索者STM32F407开发板 UCOS实验1
@@ -55,7 +55,8 @@ __align(8) OS_STK KEY_TASK_STK[KEY_STK_SIZE];
 void key_task(void *pdata);
 
 OS_TMR  * tetris_tmr;
-
+OS_EVENT  * board_sem;
+u16 level_time_ms=500;
 int main(void)
 {
     delay_init(168);       //延时初始化
@@ -79,8 +80,8 @@ void start_task(void *pdata)
     OSStatInit();  //开启统计任务
 
     OS_ENTER_CRITICAL();  //进入临界区(关闭中断)
-	
-	tetris_tmr= OSTmrCreate (0,10,OS_TMR_OPT_PERIODIC,Tetris_Tmr_Callback,(void            *)0,
+	board_sem=OSSemCreate (1);
+	tetris_tmr= OSTmrCreate (0,level_time_ms/(1000/OS_TMR_CFG_TICKS_PER_SEC),OS_TMR_OPT_PERIODIC,Tetris_Tmr_Callback,(void  *)0,
 							(INT8U *)"Tetris_Tmr", &err);//100MS周期
 	OSTmrStart(tetris_tmr,&err);
     OSTaskCreate(led0_task, (void *)0, (OS_STK *)&LED0_TASK_STK[LED0_STK_SIZE - 1], LED0_TASK_PRIO); //创建LED0任务
@@ -106,12 +107,38 @@ void led0_task(void *pdata)
 //LED1任务
 void led1_task(void *pdata)
 {
+	INT8U     err;
     while (1)
     {
-        LED1 = 0;
-        delay_ms(300);
-        LED1 = 1;
-        delay_ms(300);
+		OSSemPend (  board_sem,0,&err);
+//		printf("start:%d\r\n",OSTimeGet());
+		Show_Game_Board();
+//		printf("end:%d\r\n",OSTimeGet());
+//        LED1 = 0;
+//        delay_ms(300);
+//        LED1 = 1;
+//        delay_ms(300);
+		if(1==game_over)
+		{
+	      OSTmrStop(tetris_tmr,OS_TMR_OPT_NONE,(void *)0,&err);	
+		  OSTaskSuspend(KEY_TASK_PRIO);	
+		}
+		const u32 inc_time=(5*60*1000);
+		static u32 time=inc_time;
+		if(run_time>time)
+		{
+			if(level_time_ms>100)
+			{
+				level_time_ms-=100;
+				game_level++;
+			}
+			OSTmrDel(tetris_tmr,&err);
+			tetris_tmr= OSTmrCreate (0,level_time_ms/(1000/OS_TMR_CFG_TICKS_PER_SEC),OS_TMR_OPT_PERIODIC,Tetris_Tmr_Callback,(void   *)0,
+								(INT8U *)"Tetris_Tmr", &err);//100MS周期
+			OSTmrStart(tetris_tmr,&err);	
+			time+=inc_time;
+		}
+
     }
 }
 
@@ -121,14 +148,14 @@ void key_task(void *pdata)
     u8 key;
     while (1)
     {
-        key = KEY_Scan(1);
+        key = KEY_Scan(0);
         switch (key)
         {
 			case KEY0_PRES:
 				Move_Rigth();
 				break;
 			case KEY1_PRES:
-				Move_Down();
+				Move_Bottom();
 				break;
 			case KEY2_PRES:
 				Move_Left();
@@ -141,10 +168,10 @@ void key_task(void *pdata)
         }
         if (key != 0)
         {
-			Show_Game_Board();
-            printf("key :%d\r\n", key);
+			OSSemPost (board_sem);
+//            printf("key :%d\r\n", key);
         }
 
-       OSTimeDlyHMSM(0, 0, 0, 80);
+       OSTimeDlyHMSM(0, 0, 0, 10);
     }
 }

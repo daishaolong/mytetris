@@ -523,6 +523,11 @@
               <FileType>1</FileType>
               <FilePath>..\TETRIS\tetris.c</FilePath>
             </File>
+            <File>
+              <FileName>game_board.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\TETRIS\game_board.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
